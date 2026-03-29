@@ -2,11 +2,12 @@ mod commands;
 mod config;
 mod db;
 mod index;
-mod schema;
 mod models;
 mod neo4j;
 mod output;
+mod project;
 mod savings;
+mod schema;
 mod search;
 mod secrets;
 
@@ -33,6 +34,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Initialize project context (.gobby/gcode.json)
+    Init,
     /// Index a directory (full or incremental)
     Index {
         /// Path to index (default: project root)
@@ -121,6 +124,7 @@ fn main() -> anyhow::Result<()> {
     let ctx = config::Context::resolve(cli.project.as_deref(), cli.quiet)?;
 
     match cli.command {
+        Command::Init => commands::init::run(&ctx.project_root, cli.format, cli.quiet),
         Command::Index { path, files } => commands::index::run(&ctx, path, files),
         Command::Status => commands::status::run(&ctx, cli.format),
         Command::Invalidate => commands::status::invalidate(&ctx),

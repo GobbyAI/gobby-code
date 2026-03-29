@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context as _, bail};
+use anyhow::Context as _;
 
 use crate::secrets;
 
@@ -52,7 +52,7 @@ impl Context {
         };
 
         let db_path = resolve_db_path()?;
-        let project_id = read_project_id(&project_root)?;
+        let project_id = resolve_project_id(&project_root)?;
 
         // Resolve service configs from config_store (best-effort)
         let neo4j = resolve_neo4j_config(&db_path, quiet);
@@ -88,35 +88,50 @@ fn resolve_db_path() -> anyhow::Result<PathBuf> {
     Ok(gobby_dir.join("gobby-hub.db"))
 }
 
-/// Walk up from cwd looking for .gobby/project.json.
+/// Detect project root by walking up the directory tree.
+///
+/// Resolution order:
+/// 1. `.gobby/project.json` or `.gobby/gcode.json` (identity file)
+/// 2. VCS root (`.git` or `.hg`)
+/// 3. Current working directory
 fn detect_project_root() -> anyhow::Result<PathBuf> {
     let cwd = std::env::current_dir()?;
-    let mut dir = cwd.as_path();
 
+    // First: look for an identity file (.gobby/project.json or .gobby/gcode.json)
+    if let Some(root) = crate::project::find_project_root(&cwd) {
+        return Ok(root);
+    }
+
+    // Second: fall back to VCS root
+    let mut dir = cwd.as_path();
     loop {
-        if dir.join(".gobby").join("project.json").exists() {
+        if dir.join(".git").exists() || dir.join(".hg").exists() {
             return Ok(dir.to_path_buf());
         }
         match dir.parent() {
             Some(parent) => dir = parent,
-            None => bail!(
-                "no .gobby/project.json found (searched from {}). Run `gobby init` first.",
-                cwd.display()
-            ),
+            None => return Ok(cwd), // Last resort: cwd
         }
     }
 }
 
-/// Read project_id from .gobby/project.json.
-fn read_project_id(project_root: &Path) -> anyhow::Result<String> {
-    let path = project_root.join(".gobby").join("project.json");
-    let contents = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    let json: serde_json::Value = serde_json::from_str(&contents)?;
-    json.get("project_id")
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        .context("project_id not found in .gobby/project.json")
+/// Resolve project ID from identity files or generate deterministically.
+///
+/// Resolution order:
+/// 1. `.gobby/project.json` — gobby's file (reads `"id"`, falls back to `"project_id"`)
+/// 2. `.gobby/gcode.json` — gcode's standalone identity
+/// 3. Generate deterministic UUID5 from canonical path (no filesystem writes)
+fn resolve_project_id(project_root: &Path) -> anyhow::Result<String> {
+    let gobby_dir = project_root.join(".gobby");
+
+    if gobby_dir.join("project.json").exists() {
+        return crate::project::read_project_id(project_root);
+    }
+    if gobby_dir.join("gcode.json").exists() {
+        return crate::project::read_gcode_json(project_root);
+    }
+
+    Ok(crate::project::generate_project_id(project_root))
 }
 
 // ── Config store helpers ─────────────────────────────────────────────

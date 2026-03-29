@@ -8,6 +8,9 @@ pub fn run(
     path: Option<String>,
     files: Option<Vec<String>>,
 ) -> anyhow::Result<()> {
+    // Auto-init: ensure identity file exists before indexing
+    crate::project::ensure_gcode_json(&ctx.project_root)?;
+
     let conn = db::open_readwrite(&ctx.db_path)?;
     let root = path
         .as_deref()

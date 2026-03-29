@@ -66,6 +66,10 @@ pub fn search(
         }
     }
 
+    if results.is_empty() && !crate::project::has_identity_file(&ctx.project_root) {
+        eprintln!("No index found for this project. Run `gcode index` first.");
+    }
+
     match format {
         Format::Json => output::print_json(&results),
         Format::Text => {
