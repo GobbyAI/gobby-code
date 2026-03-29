@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod db;
 mod index;
+mod schema;
 mod models;
 mod neo4j;
 mod output;
