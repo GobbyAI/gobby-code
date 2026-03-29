@@ -80,23 +80,23 @@ fn resolve_db_path(project_root: &Path) -> anyhow::Result<PathBuf> {
         .context("cannot determine home directory")?
         .join(".gobby");
 
-    // 1. Explicit config from bootstrap.yaml
-    let bootstrap_path = gobby_dir.join("bootstrap.yaml");
-    if bootstrap_path.exists() {
-        let contents = std::fs::read_to_string(&bootstrap_path)?;
-        let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
-        if let Some(db) = yaml.get("database_path").and_then(|v| v.as_str()) {
-            let expanded = db.replace("~", &gobby_dir.parent().unwrap().to_string_lossy());
-            return Ok(PathBuf::from(expanded));
-        }
-    }
+    let has_project_json = project_root.join(".gobby").join("project.json").exists();
 
-    // 2. Gobby present → shared DB
-    if project_root.join(".gobby").join("project.json").exists() {
+    if has_project_json {
+        // Gobby project — use bootstrap.yaml path or default gobby-hub.db
+        let bootstrap_path = gobby_dir.join("bootstrap.yaml");
+        if bootstrap_path.exists() {
+            let contents = std::fs::read_to_string(&bootstrap_path)?;
+            let yaml: serde_yaml::Value = serde_yaml::from_str(&contents)?;
+            if let Some(db) = yaml.get("database_path").and_then(|v| v.as_str()) {
+                let expanded = db.replace("~", &gobby_dir.parent().unwrap().to_string_lossy());
+                return Ok(PathBuf::from(expanded));
+            }
+        }
         return Ok(gobby_dir.join("gobby-hub.db"));
     }
 
-    // 3. Standalone → gcode's own DB
+    // Standalone → gcode's own DB (no bootstrap.yaml influence)
     Ok(gobby_dir.join("gobby-code-index.db"))
 }
 
@@ -149,13 +149,22 @@ fn resolve_project_id(project_root: &Path) -> anyhow::Result<String> {
 // ── Config store helpers ─────────────────────────────────────────────
 
 /// Read a value from the config_store table, returning None if missing.
+/// Values are stored as JSON — strip surrounding quotes if present.
 fn read_config_value(conn: &rusqlite::Connection, key: &str) -> Option<String> {
-    conn.query_row(
-        "SELECT value FROM config_store WHERE key = ?1",
-        rusqlite::params![key],
-        |row| row.get::<_, String>(0),
-    )
-    .ok()
+    let raw = conn
+        .query_row(
+            "SELECT value FROM config_store WHERE key = ?1",
+            rusqlite::params![key],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()?;
+
+    // Gobby stores values as JSON; strip surrounding quotes for string values
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        Some(raw[1..raw.len() - 1].to_string())
+    } else {
+        Some(raw)
+    }
 }
 
 /// Resolve Neo4j configuration from config_store + env vars.
@@ -169,11 +178,27 @@ fn resolve_neo4j_config(db_path: &Path, quiet: bool) -> Option<Neo4jConfig> {
     conn.busy_timeout(std::time::Duration::from_millis(5000))
         .ok()?;
 
-    // Read from config_store with env var overrides
+    // Check if config_store exists (only present in gobby-managed DBs)
+    let has_config_store = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='config_store'",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+
+    // Read from config_store with env var overrides.
+    // Only apply hardcoded default if config_store exists (gobby DB).
     let url = std::env::var("GOBBY_NEO4J_URL")
         .ok()
         .or_else(|| read_config_value(&conn, "memory.neo4j_url"))
-        .or_else(|| Some("http://localhost:8474".to_string()))?;
+        .or_else(|| {
+            if has_config_store {
+                Some("http://localhost:8474".to_string())
+            } else {
+                None
+            }
+        })?;
 
     let raw_auth = std::env::var("GOBBY_NEO4J_AUTH")
         .ok()

@@ -299,6 +299,10 @@ pub fn invalidate(conn: &Connection, project_id: &str) -> anyhow::Result<()> {
         "DELETE FROM code_content_chunks WHERE project_id = ?1",
         rusqlite::params![project_id],
     )?;
+    conn.execute(
+        "DELETE FROM code_indexed_projects WHERE id = ?1",
+        rusqlite::params![project_id],
+    )?;
     eprintln!("Invalidated code index for project {project_id}");
     Ok(())
 }
