@@ -117,15 +117,32 @@ enum Command {
     },
     /// Directory-grouped project stats
     RepoOutline,
+    /// List indexed projects
+    Projects,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    // Commands that must run before Context::resolve() (work on uninitialized projects)
+    match &cli.command {
+        Command::Init => {
+            let root = match &cli.project {
+                Some(p) => std::path::PathBuf::from(p).canonicalize()?,
+                None => config::detect_project_root()?,
+            };
+            return commands::init::run(&root, cli.format, cli.quiet);
+        }
+        Command::Projects => {
+            return commands::status::projects(cli.format);
+        }
+        _ => {}
+    }
+
     let ctx = config::Context::resolve(cli.project.as_deref(), cli.quiet)?;
 
     match cli.command {
-        Command::Init => commands::init::run(&ctx.project_root, cli.format, cli.quiet),
+        Command::Init | Command::Projects => unreachable!(),
         Command::Index { path, files } => commands::index::run(&ctx, path, files),
         Command::Status => commands::status::run(&ctx, cli.format),
         Command::Invalidate => commands::status::invalidate(&ctx),

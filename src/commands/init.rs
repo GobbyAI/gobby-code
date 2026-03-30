@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use crate::config;
+use crate::db;
+use crate::index::indexer;
 use crate::output::{self, Format};
 use crate::project;
 use crate::skill;
@@ -37,12 +40,26 @@ pub fn run(project_root: &Path, format: Format, quiet: bool) -> anyhow::Result<(
         }
     }
 
+    // Auto-index the project (resolve DB path directly — Context::resolve() can't run yet)
+    let db_path = config::resolve_db_path(project_root)?;
+    let conn = db::open_readwrite(&db_path)?;
+    let index_result = indexer::index_directory(&conn, project_root, &project_id, true, None, None)?;
+    if !quiet {
+        eprintln!(
+            "Indexed {} files, {} symbols in {}ms",
+            index_result.files_indexed, index_result.symbols_found, index_result.duration_ms
+        );
+    }
+
     match format {
         Format::Json => {
             let mut result = serde_json::json!({
                 "project_id": project_id,
                 "project_root": project_root.to_string_lossy(),
                 "status": status,
+                "files_indexed": index_result.files_indexed,
+                "symbols_found": index_result.symbols_found,
+                "duration_ms": index_result.duration_ms,
             });
             if !installed_skills.is_empty() {
                 result["skills_installed"] = serde_json::json!(installed_skills);

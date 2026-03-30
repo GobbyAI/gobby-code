@@ -47,7 +47,15 @@ impl Context {
     /// Resolve context from CLI args and filesystem state.
     pub fn resolve(project_override: Option<&str>, quiet: bool) -> anyhow::Result<Self> {
         let project_root = match project_override {
-            Some(p) => PathBuf::from(p).canonicalize()?,
+            Some(p) => {
+                let path = PathBuf::from(p);
+                if path.is_dir() {
+                    path.canonicalize()?
+                } else {
+                    // Not a directory — try name lookup in DB
+                    resolve_project_by_name(p)?
+                }
+            }
             None => detect_project_root()?,
         };
 
@@ -69,13 +77,74 @@ impl Context {
     }
 }
 
+/// Resolve a `--project` name to a project root by looking up `code_indexed_projects`.
+///
+/// Searches both `gobby-code-index.db` (standalone) and `gobby-hub.db` (gobby-managed).
+/// Matches against the basename of `root_path`.
+fn resolve_project_by_name(name: &str) -> anyhow::Result<PathBuf> {
+    let gobby_dir = dirs::home_dir()
+        .context("cannot determine home directory")?
+        .join(".gobby");
+
+    let db_paths = [
+        gobby_dir.join("gobby-code-index.db"),
+        gobby_dir.join("gobby-hub.db"),
+    ];
+
+    for db_path in &db_paths {
+        if !db_path.exists() {
+            continue;
+        }
+        let conn = match rusqlite::Connection::open_with_flags(
+            db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let _ = conn.busy_timeout(std::time::Duration::from_millis(5000));
+
+        // Check table exists
+        let has_table: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='code_indexed_projects')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        if !has_table {
+            continue;
+        }
+
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT root_path FROM code_indexed_projects WHERE root_path LIKE '%/' || ?1",
+                rusqlite::params![name],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(root_path) = result {
+            let path = PathBuf::from(&root_path);
+            if path.is_dir() {
+                return Ok(path);
+            }
+        }
+    }
+
+    anyhow::bail!(
+        "Project '{}' not found. Run `gcode projects` to see indexed projects.",
+        name
+    )
+}
+
 /// Resolve database path.
 ///
 /// Resolution order:
 /// 1. `~/.gobby/bootstrap.yaml` `database_path` key (gobby configured a custom path)
 /// 2. `.gobby/project.json` exists in project root → `~/.gobby/gobby-hub.db` (gobby present)
 /// 3. Neither → `~/.gobby/gobby-code-index.db` (standalone)
-fn resolve_db_path(project_root: &Path) -> anyhow::Result<PathBuf> {
+pub fn resolve_db_path(project_root: &Path) -> anyhow::Result<PathBuf> {
     let gobby_dir = dirs::home_dir()
         .context("cannot determine home directory")?
         .join(".gobby");
@@ -106,7 +175,7 @@ fn resolve_db_path(project_root: &Path) -> anyhow::Result<PathBuf> {
 /// 1. `.gobby/project.json` or `.gobby/gcode.json` (identity file)
 /// 2. VCS root (`.git` or `.hg`)
 /// 3. Current working directory
-fn detect_project_root() -> anyhow::Result<PathBuf> {
+pub fn detect_project_root() -> anyhow::Result<PathBuf> {
     let cwd = std::env::current_dir()?;
 
     // First: look for an identity file (.gobby/project.json or .gobby/gcode.json)
@@ -143,7 +212,10 @@ fn resolve_project_id(project_root: &Path) -> anyhow::Result<String> {
         return crate::project::read_gcode_json(project_root);
     }
 
-    Ok(crate::project::generate_project_id(project_root))
+    anyhow::bail!(
+        "No gcode project found. Run `gcode init` to initialize, \
+         or use `--project <path>` to specify a project directory."
+    )
 }
 
 // ── Config store helpers ─────────────────────────────────────────────

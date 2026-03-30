@@ -15,8 +15,7 @@ Fast AST-aware search and navigation. Saves 90%+ tokens vs reading entire files.
 ## Quick Start
 
 ```bash
-gcode init        # Initialize project (creates .gobby/gcode.json)
-gcode index .     # Index the codebase (incremental on subsequent runs)
+gcode init        # Initialize and index the project in one step
 ```
 
 ## Search
