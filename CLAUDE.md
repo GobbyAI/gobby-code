@@ -4,22 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-`gobby-code` is a Rust CLI (binary: `gcode`) for Gobby's code index. It provides AST-aware search, symbol navigation, and dependency graph analysis. It reads/writes the same databases as the Gobby daemon — SQLite for symbols/search, Neo4j for the call graph, Qdrant for semantic vectors.
+A Cargo workspace containing two Gobby CLI tools:
+
+- **gcode** (`crates/gcode/`) — AST-aware code search, symbol navigation, and dependency graph analysis. Reads/writes the same databases as the Gobby daemon (SQLite, Neo4j, Qdrant).
+- **gsqz** (`crates/gsqz/`) — YAML-configurable output compressor for LLM token optimization. Wraps shell commands and applies pattern-based compression pipelines.
 
 ## Build & Test Commands
 
 ```bash
-cargo build --release                        # Build with embeddings (requires cmake)
-cargo build --release --no-default-features  # Build without embeddings
-cargo test                                   # Run all tests (with embeddings)
-cargo test --no-default-features             # Run all tests (without embeddings)
-cargo test <test_name>                       # Run a single test
-cargo clippy                                 # Lint
+cargo build --workspace                              # Build everything (gcode requires cmake for embeddings)
+cargo build --workspace --no-default-features        # Build everything without embeddings
+cargo test --workspace                               # Test everything
+cargo test --workspace --no-default-features         # Test without embeddings
+cargo test -p gobby-code --no-default-features       # Test gcode only
+cargo test -p gobby-squeeze                          # Test gsqz only
+cargo clippy --workspace --no-default-features -- -D warnings  # Lint all
+cargo fmt --all --check                              # Check formatting
 ```
 
-The `embeddings` feature (default: on) enables local GGUF embedding via `llama-cpp-2` and requires cmake. macOS builds use Metal GPU acceleration. Linux/Windows CI builds disable embeddings (`--no-default-features`).
+The `embeddings` feature (gcode, default: on) enables local GGUF embedding via `llama-cpp-2` and requires cmake. macOS builds use Metal GPU acceleration. Linux/Windows CI builds disable embeddings (`--no-default-features`).
 
-## Architecture
+## Workspace Layout
+
+```
+crates/
+  gcode/    — Heavy binary (tree-sitter, SQLite, Neo4j, Qdrant, opt-level=3)
+  gsqz/     — Tiny binary (regex pipelines, shell wrapper, opt-level="z")
+```
+
+Release profiles are in the root `Cargo.toml` with per-package overrides. Each binary has its own optimization level.
+
+## gcode Architecture
 
 ### Data Flow
 
@@ -50,8 +65,25 @@ Each subcommand maps to a function: `index::run`, `search::search`, `symbols::ou
 
 Neo4j/Qdrant/GGUF model can each be unavailable independently. Graph commands return `[]` when Neo4j is down; search loses the corresponding boost but FTS5 always works if the project is indexed.
 
+## gsqz Architecture
+
+### Data Flow
+
+CLI parses args → loads layered config → executes shell command → strips ANSI codes → optionally fetches daemon config overrides → matches command against pipeline regexes (first match wins) → applies step sequence → optionally reports savings to daemon → prints compressed output.
+
+**Always exits with code 0** — intentional to prevent Claude Code from framing compressed output as an error.
+
+### Core Modules
+
+- **`config`** — Layered config system: built-in `config.yaml` → global (`~/.gobby/gsqz.yaml`) → project (`.gobby/gsqz.yaml`) → CLI override. Custom `Visitor` deserializer for the polymorphic `Step` enum.
+- **`compressor`** — Orchestrator that compiles pipeline regexes, matches commands, applies steps, and enforces thresholds (min output length, max compressed lines, 95% savings threshold).
+- **`daemon`** — Feature-gated (`#[cfg(feature = "gobby")]`) HTTP integration with the gobby daemon for runtime config overrides and savings reporting. All HTTP calls are fire-and-forget with 1s timeouts.
+- **`primitives/`** — Four composable operations on line collections: `filter`, `group` (8 modes), `dedup`, `truncate`.
+
 ## Key Constraints
 
-- **UUID5 parity with Python**: Symbol IDs are deterministic UUID5 using namespace `c0de1de0-0000-4000-8000-000000000000` and key format `{project_id}:{file_path}:{name}:{kind}:{byte_start}`. Must match the Python daemon's `Symbol.make_id()` exactly.
-- **Config resolution order**: env vars (`GOBBY_NEO4J_URL`, etc.) → `config_store` table → hardcoded defaults.
-- **Tree-sitter grammars**: Tier 1 (Python/JS/TS/Go/Rust/Java/C/C++/C#/Ruby/PHP/Swift/Kotlin), Tier 2 (Dart/Elixir), Tier 3 (JSON/YAML/Markdown). Adding a language requires a new `tree-sitter-*` dep in `Cargo.toml` and a grammar entry in `index/languages`.
+- **UUID5 parity with Python** (gcode): Symbol IDs are deterministic UUID5 using namespace `c0de1de0-0000-4000-8000-000000000000` and key format `{project_id}:{file_path}:{name}:{kind}:{byte_start}`. Must match the Python daemon's `Symbol.make_id()` exactly.
+- **Config resolution order** (gcode): env vars (`GOBBY_NEO4J_URL`, etc.) → `config_store` table → hardcoded defaults.
+- **Tree-sitter grammars** (gcode): Tier 1 (Python/JS/TS/Go/Rust/Java/C/C++/C#/Ruby/PHP/Swift/Kotlin), Tier 2 (Dart/Elixir), Tier 3 (JSON/YAML/Markdown). Adding a language requires a new `tree-sitter-*` dep in `crates/gcode/Cargo.toml` and a grammar entry in `index/languages`.
+- **Non-destructive to Gobby databases** (gcode): Detect and skip existing Gobby-owned databases and tables. Never alter `project.json` or Gobby-managed schema.
+- **Exit code 0** (gsqz): Always exit 0 regardless of subprocess exit code. The LLM reads pass/fail from content.
