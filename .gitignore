@@ -1,4 +1,6 @@
 /target
 .claude/
 .gobby/
+!.gobby/tasks.jsonl
+!.gobby/memories.jsonl
 .playwright/

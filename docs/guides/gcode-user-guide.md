@@ -217,6 +217,8 @@ gcode invalidate
 gcode index
 ```
 
+In Gobby mode, `invalidate` also notifies the daemon to clean up Neo4j graph nodes and Qdrant vectors for the project. Use `--force` to skip the confirmation prompt.
+
 ## Operating Modes
 
 ### Standalone Mode
@@ -241,13 +243,18 @@ Graph commands and semantic search become available in this mode.
 
 gcode resolves configuration in this order:
 
-1. **Environment variables** — `GOBBY_NEO4J_URL`, `GOBBY_NEO4J_AUTH`, `GOBBY_QDRANT_URL`
+1. **Environment variables** — `GOBBY_NEO4J_URL`, `GOBBY_NEO4J_AUTH`, `GOBBY_QDRANT_URL`, `GOBBY_PORT`
 2. **config_store table** — Key-value pairs in the SQLite database
 3. **Hardcoded defaults** — Neo4j at `http://localhost:8474`, database `neo4j`
 
 The database path itself is resolved from:
 1. `~/.gobby/bootstrap.yaml` `database_path` key
 2. Default based on mode (standalone vs Gobby)
+
+The daemon URL (used by `invalidate`) is resolved from:
+1. `GOBBY_PORT` environment variable (e.g. `60887`)
+2. `~/.gobby/bootstrap.yaml` `daemon_port` + `bind_host` keys
+3. Not available if bootstrap.yaml is missing (standalone mode)
 
 ## Output Formats
 
