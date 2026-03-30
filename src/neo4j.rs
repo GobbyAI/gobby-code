@@ -329,12 +329,21 @@ pub fn write_imports(client: &Neo4jClient, project_id: &str, imports: &[ImportRe
     }
 }
 
-/// Delete all graph data for a file (used before re-indexing).
+/// Delete graph data for a file before re-indexing.
+///
+/// Preserves incoming CALLS edges to symbol nodes (from other files).
+/// Symbol nodes become orphaned but are re-merged by write_defines.
 pub fn delete_file_graph(client: &Neo4jClient, project_id: &str, file_path: &str) {
+    // 1. Delete outgoing relationships from symbols defined in this file
+    // 2. Detach-delete the CodeFile node (removes DEFINES + IMPORTS edges)
+    // Symbol nodes remain with incoming CALLS edges intact.
     let _ = client.query(
         "MATCH (f:CodeFile {path: $file_path, project: $project}) \
          OPTIONAL MATCH (f)-[:DEFINES]->(s:CodeSymbol) \
-         DETACH DELETE f, s",
+         OPTIONAL MATCH (s)-[r_out]->() \
+         DELETE r_out \
+         WITH f \
+         DETACH DELETE f",
         Some(serde_json::json!({
             "file_path": file_path,
             "project": project_id,
