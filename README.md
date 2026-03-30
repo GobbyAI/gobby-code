@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD033 MD041 -->
 <p align="center">
-  <img src="https://raw.githubusercontent.com/GobbyAI/gobby/main/logo.png" alt="Gobby" width="160" />
+  <img src="logo.png" alt="Gobby" width="160" />
 </p>
 
 <h1 align="center">gcode</h1>
@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/GobbyAI/gobby-code/actions/workflows/ci.yml"><img src="https://github.com/GobbyAI/gobby-code/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/GobbyAI/gobby-code/releases/latest"><img src="https://img.shields.io/github/v/release/GobbyAI/gobby-code" alt="Release"></a>
-  <a href="https://github.com/GobbyAI/gobby-code"><img src="https://img.shields.io/badge/built%20with-Gobby-blueviolet" alt="Built with Gobby"></a>
+  <a href="https://github.com/GobbyAI/gobby-code"><img src="built-with-gobby.svg" alt="Built with Gobby"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
 </p>
 
