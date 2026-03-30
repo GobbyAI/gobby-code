@@ -45,7 +45,7 @@ Squeezes CLI output before it eats your context window. 28 built-in pipelines fo
 
 Download from [GitHub Releases](https://github.com/GobbyAI/gobby-cli/releases/latest). Binaries are available for macOS (ARM/x86), Linux (x86/ARM), and Windows (x86/ARM).
 
-### From source
+### From crates.io
 
 ```bash
 # gcode (with embeddings — requires cmake)
@@ -56,6 +56,15 @@ cargo install gobby-code --no-default-features
 
 # gsqz
 cargo install gobby-squeeze
+```
+
+### From source
+
+```bash
+git clone https://github.com/GobbyAI/gobby-cli.git
+cd gobby-cli
+cargo install --path crates/gcode
+cargo install --path crates/gsqz
 ```
 
 ## Development
