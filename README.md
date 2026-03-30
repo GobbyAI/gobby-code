@@ -23,12 +23,21 @@
 
 This workspace contains two Gobby CLI tools:
 
-| Binary | Package | Description |
-|--------|---------|-------------|
-| `gcode` | `gobby-code` | AST-aware code search, symbol navigation, and dependency graph analysis |
-| `gsqz` | `gobby-squeeze` | YAML-configurable output compressor for LLM token optimization |
+### gcode — Code Search & Navigation
 
-See [crates/gcode/README.md](crates/gcode/README.md) and [crates/gsqz/README.md](crates/gsqz/README.md) for detailed documentation on each tool.
+AST-aware code search powered by tree-sitter. Indexes 18 languages into SQLite FTS5 for instant symbol lookup, content search, and file tree navigation. With Gobby, adds semantic vector search (Qdrant) and dependency graph analysis (Neo4j) — callers, usages, imports, and blast-radius. Incremental indexing, cross-project queries, and graceful degradation when services are unavailable.
+
+### gsqz — Output Compression
+
+Squeezes CLI output before it eats your context window. 28 built-in pipelines for git, cargo, pytest, eslint, ruff, npm, and more. Filters noise, groups errors by rule, collapses repeats, and typically reduces token consumption by >90%. ~9ms overhead. YAML-configurable with layered config (global → project → CLI).
+
+## Documentation
+
+- [gcode User Guide](docs/guides/gcode-user-guide.md) — search, symbols, dependency graphs, project management
+- [gsqz User Guide](docs/guides/gsqz-user-guide.md) — pipelines, step types, configuration, debugging
+- [Changelog](CHANGELOG.md) — release history
+- [gcode README](crates/gcode/README.md) — architecture and build details
+- [gsqz README](crates/gsqz/README.md) — architecture and build details
 
 ## Install
 

@@ -1,7 +1,7 @@
 {
-  "id": "c552b87d-93d3-458a-97dc-0954ba83f623",
-  "name": "gobby-code",
-  "created_at": "2026-03-29T19:34:40.005363+00:00",
+  "id": "3bf57fe7-2a0c-4074-8912-a83d9cd4df01",
+  "name": "gobby-cli",
+  "created_at": "2026-03-30T03:55:15.086968+00:00",
   "verification": {
     "unit_tests": "cargo test",
     "lint": "cargo clippy"
