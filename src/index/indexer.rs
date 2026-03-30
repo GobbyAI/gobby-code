@@ -15,6 +15,7 @@ use crate::index::walker;
 use crate::config::QdrantConfig;
 use crate::models::{IndexResult, IndexedFile, IndexedProject};
 use crate::neo4j::Neo4jClient;
+use crate::progress::ProgressBar;
 use crate::search::semantic;
 
 /// Default exclude patterns (matching Python CodeIndexConfig defaults).
@@ -32,6 +33,7 @@ pub fn index_directory(
     incremental: bool,
     neo4j: Option<&Neo4jClient>,
     qdrant: Option<&QdrantConfig>,
+    quiet: bool,
 ) -> anyhow::Result<IndexResult> {
     let start = Instant::now();
     let mut result = IndexResult {
@@ -69,11 +71,16 @@ pub fn index_directory(
     }
 
     // Index each candidate file
+    let total_files = candidates.len() + content_only.len();
+    let mut progress = ProgressBar::new(total_files, quiet);
+
     for path in &candidates {
         let rel = match relative_path(path, root_path) {
             Ok(r) => r,
             Err(_) => continue,
         };
+
+        progress.tick(&rel);
 
         if let Some(ref stale_set) = stale
             && !stale_set.contains(&rel) {
@@ -94,8 +101,12 @@ pub fn index_directory(
 
     // Index content-only files
     for path in &content_only {
+        let rel = relative_path(path, root_path).unwrap_or_default();
+        progress.tick(&rel);
         index_content_only(conn, path, project_id, root_path);
     }
+
+    progress.finish();
 
     let elapsed_ms = start.elapsed().as_millis() as u64;
     result.duration_ms = elapsed_ms;
@@ -114,11 +125,6 @@ pub fn index_directory(
             last_indexed_at: iso_now(),
             index_duration_ms: elapsed_ms,
         },
-    );
-
-    eprintln!(
-        "Indexed {} files ({} skipped), {} symbols in {}ms",
-        result.files_indexed, result.files_skipped, result.symbols_found, elapsed_ms
     );
 
     Ok(result)

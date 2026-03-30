@@ -5,6 +5,7 @@ mod index;
 mod models;
 mod neo4j;
 mod output;
+mod progress;
 mod project;
 mod savings;
 mod schema;

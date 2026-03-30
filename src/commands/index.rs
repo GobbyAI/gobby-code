@@ -31,7 +31,13 @@ pub fn run(
             );
         }
     } else {
-        indexer::index_directory(&conn, &root, &ctx.project_id, true, neo4j_ref, qdrant_ref)?;
+        let result = indexer::index_directory(&conn, &root, &ctx.project_id, true, neo4j_ref, qdrant_ref, ctx.quiet)?;
+        if !ctx.quiet {
+            eprintln!(
+                "Indexed {} files ({} skipped), {} symbols in {}ms",
+                result.files_indexed, result.files_skipped, result.symbols_found, result.duration_ms
+            );
+        }
     }
 
     Ok(())
