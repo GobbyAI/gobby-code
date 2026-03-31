@@ -271,6 +271,12 @@ Suppress warnings and progress bars with `--quiet`:
 gcode index --quiet
 ```
 
+Enable GGML/llama.cpp debug output with `--verbose` (suppressed by default):
+
+```bash
+gcode search "query" --verbose
+```
+
 ## Troubleshooting
 
 ### "No gcode project found"
