@@ -244,7 +244,7 @@ Graph commands and semantic search become available in this mode.
 gcode resolves configuration in this order:
 
 1. **Environment variables** — `GOBBY_NEO4J_URL`, `GOBBY_NEO4J_AUTH`, `GOBBY_QDRANT_URL`, `GOBBY_PORT`
-2. **config_store table** — Key-value pairs in the SQLite database
+2. **config_store table** — Key-value pairs in the SQLite database (`databases.neo4j.*`, `databases.qdrant.*`)
 3. **Hardcoded defaults** — Neo4j at `http://localhost:8474`, database `neo4j`
 
 The database path itself is resolved from:
