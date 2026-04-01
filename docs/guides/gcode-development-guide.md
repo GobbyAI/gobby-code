@@ -9,7 +9,7 @@ CLI (main.rs, clap)
   → Context::resolve (config.rs)
     → detect_project_root / resolve_db_path / resolve_services
   → Command dispatch (main.rs match)
-    → commands/{search,symbols,graph,index,status,init,summary}.rs
+    → commands/{search,symbols,graph,index,status,init}.rs
       → search/ pipeline (FTS5 + semantic + graph → RRF)
       → index/ pipeline (walker → parser → chunker → hasher → indexer)
       → neo4j (HTTP Cypher queries)
@@ -130,9 +130,11 @@ Files are split into overlapping chunks for FTS5 content search:
 ### Incremental Indexing (indexer.rs)
 
 1. **Hash comparison**: SHA-256 content hash per file, stored in `code_indexed_files`
-2. **Stale detection**: Compare current hashes against stored hashes; files with changed hashes are re-indexed
+2. **Stale detection**: Compare current hashes against stored hashes; files with changed hashes are re-indexed. When the `graph_synced` column exists (Gobby mode), files where `graph_synced=0` are also detected as stale with reason `GraphSyncPending`
 3. **Orphan cleanup**: Files in the DB that no longer exist on disk have their data deleted from SQLite, Neo4j, and Qdrant
-4. **Per-file cleanup**: Before re-indexing a file, `delete_file_data` removes old symbols from SQLite, vectors from Qdrant, and graph nodes from Neo4j
+4. **Per-file transactions**: SQLite writes (delete old data, upsert symbols, upsert file, upsert content chunks) are wrapped in a single transaction to prevent half-indexed files on crash
+5. **External writes**: After the SQLite transaction commits, Neo4j/Qdrant writes happen outside the transaction. If all succeed, `graph_synced` is set to `1`. If any fail, it stays `0` and the next incremental run retries
+6. **Graph-sync-only path**: Files with `StaleReason::GraphSyncPending` skip the SQLite transaction entirely — only external writes are retried
 
 The `--full` flag skips the hash comparison and re-indexes all files, ensuring stale external index entries are cleaned up.
 
@@ -230,7 +232,6 @@ All search/graph commands return a `PagedResponse` envelope:
 | docstring | TEXT | Python/JS/TS only |
 | parent_symbol_id | TEXT | Enclosing class/type ID |
 | content_hash | TEXT | SHA-256 of symbol source |
-| summary | TEXT | LLM-generated description |
 | created_at, updated_at | TEXT | Epoch seconds as string |
 
 **`code_indexed_files`** — File index metadata
@@ -245,6 +246,7 @@ All search/graph commands return a `PagedResponse` envelope:
 | symbol_count | INTEGER | |
 | byte_size | INTEGER | |
 | indexed_at | TEXT | Epoch seconds |
+| graph_synced | INTEGER | 0=pending, 1=Neo4j/Qdrant synced (Gobby mode only) |
 
 **`code_content_chunks`** — File content for FTS search
 
@@ -326,14 +328,13 @@ The system always works with just SQLite — FTS5 search and outline are fully f
 
 ### Default (Slim)
 
-- **Search**: `id`, `name`, `qualified_name`, `kind`, `file_path`, `line_start`, `score`, `signature`, `sources` — no `summary`
-- **Outline**: `id`, `name`, `kind`, `line_start`, `line_end`, `signature` (6 fields vs 18 on full Symbol)
+- **Search**: `id`, `name`, `qualified_name`, `kind`, `file_path`, `line_start`, `score`, `signature`, `sources`
+- **Outline**: `id`, `name`, `kind`, `line_start`, `line_end`, `signature` (6 fields vs full Symbol)
 - **Graph**: `id`, `name`, `file_path`, `line`, `relation`, `distance`
 
 ### Verbose (`--verbose`)
 
-- **Search**: Adds `summary` field (LLM-generated description)
-- **Outline**: Returns full `Symbol` struct with all 18 fields
+- **Outline**: Returns full `Symbol` struct with all fields
 
 Fields never shown even in verbose: `content_hash`, `created_at`, `updated_at`, `byte_start`, `byte_end`. `project_id` is hoisted to the `PagedResponse` envelope.
 

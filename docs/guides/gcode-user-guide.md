@@ -75,7 +75,7 @@ gcode search "config" --offset 10          # Page 2 of results
 
 ### Text Search (`gcode search-text`)
 
-FTS5 search on symbol metadata: names, qualified names, signatures, docstrings, and summaries.
+FTS5 search on symbol metadata: names, qualified names, signatures, and docstrings.
 
 ```bash
 gcode search-text "parseConfig"
@@ -306,11 +306,10 @@ Text output shows a pagination hint when more results are available:
 `--verbose` controls both GGML debug logging and output detail level:
 
 ```bash
-gcode search "query" --verbose   # Include summaries in results
 gcode outline src/main.rs --verbose  # Full symbol details instead of slim
 ```
 
-Default output is optimized for token efficiency — slim fields, no AI-generated summaries. Use `--verbose` when you need the full picture.
+Default output is optimized for token efficiency — slim fields only. Use `--verbose` when you need full symbol details.
 
 Suppress warnings and progress bars with `--quiet`:
 

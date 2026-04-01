@@ -46,7 +46,7 @@ Release profiles are in the root `Cargo.toml` with per-package overrides. Each b
 - **`db`** — Thin SQLite connection helpers (`open_readwrite` with WAL, `open_readonly`). All connections use 5s busy timeout.
 - **`models`** — All data types: `Symbol`, `IndexedFile`, `ContentChunk`, `SearchResult`, `GraphResult`, etc.
 - **`secrets`** — Fernet decryption of Gobby secrets using `~/.gobby/machine_id` + `~/.gobby/.secret_salt` for key derivation.
-- **`neo4j`** — HTTP client for Neo4j Cypher queries (callers, usages, imports, blast radius).
+- **`neo4j`** — HTTP client for Neo4j Cypher queries (callers, usages, imports, blast radius). Write functions return `Result<()>` to enable error tracking.
 - **`output`** — Output formatting (text vs JSON).
 
 ### `commands/` — CLI Command Handlers
