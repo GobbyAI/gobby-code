@@ -49,7 +49,7 @@ After init, you can search immediately.
 gcode search "handleAuth"
 ```
 
-Returns matching symbols ranked by relevance — function names, class definitions, method signatures — with file paths, line numbers, and source snippets.
+Returns matching symbols ranked by relevance — function names, class definitions, method signatures — with file paths, line numbers, and signatures. JSON output is wrapped in a pagination envelope showing `total`, `offset`, and `limit`.
 
 ## Search
 
@@ -63,12 +63,14 @@ The default. Combines FTS5 text matching, semantic vector similarity, and graph 
 gcode search "database connection pool"
 gcode search "auth" --limit 5
 gcode search "handler" --kind function
+gcode search "config" --offset 10          # Page 2 of results
 ```
 
 **When to use:** General-purpose queries. Best for natural language and conceptual searches.
 
 **Options:**
-- `--limit N` — Max results (default: 20)
+- `--limit N` — Max results (default: 10)
+- `--offset N` — Skip first N results for pagination (default: 0)
 - `--kind <kind>` — Filter by symbol kind: `function`, `class`, `method`, `type`, etc.
 
 ### Text Search (`gcode search-text`)
@@ -102,7 +104,7 @@ Get the hierarchical symbol tree for a file:
 gcode outline src/config.rs
 ```
 
-Returns all functions, classes, methods, structs, etc. in the file with their line ranges and signatures. Much cheaper than reading the entire file.
+Returns all functions, classes, methods, structs, etc. in the file with their line ranges and signatures. JSON output uses a slim format (id, name, kind, line_start, line_end, signature) — use `--verbose` for full symbol details. Much cheaper than reading the entire file.
 
 ### Symbol by ID
 
@@ -142,7 +144,8 @@ Who calls this function?
 
 ```bash
 gcode callers "handleAuth"
-gcode callers "handleAuth" --limit 50
+gcode callers "handleAuth" --limit 20
+gcode callers "handleAuth" --offset 10    # Page 2
 ```
 
 ### Usages
@@ -213,13 +216,19 @@ Incremental re-index (only changed files):
 gcode index
 ```
 
+Full re-index (re-processes all files, cleans stale external index entries):
+
+```bash
+gcode index --full
+```
+
 Index specific files:
 
 ```bash
 gcode index --files src/config.rs src/main.rs
 ```
 
-Force full re-index (destructive — prompts for confirmation):
+Reset and rebuild from scratch (destructive — prompts for confirmation):
 
 ```bash
 gcode invalidate
@@ -274,16 +283,39 @@ gcode search "query" --format json   # Default — structured JSON
 gcode search "query" --format text   # Human-readable text
 ```
 
+JSON output for search/callers/usages is wrapped in a pagination envelope:
+
+```json
+{
+  "project_id": "3bf57fe7-...",
+  "total": 47,
+  "offset": 0,
+  "limit": 10,
+  "results": [...]
+}
+```
+
+Text output shows a pagination hint when more results are available:
+
+```text
+-- 10 of 47 results (use --offset 10 for more)
+```
+
+### Verbose output
+
+`--verbose` controls both GGML debug logging and output detail level:
+
+```bash
+gcode search "query" --verbose   # Include summaries in results
+gcode outline src/main.rs --verbose  # Full symbol details instead of slim
+```
+
+Default output is optimized for token efficiency — slim fields, no AI-generated summaries. Use `--verbose` when you need the full picture.
+
 Suppress warnings and progress bars with `--quiet`:
 
 ```bash
 gcode index --quiet
-```
-
-Enable GGML/llama.cpp debug output with `--verbose` (suppressed by default):
-
-```bash
-gcode search "query" --verbose
 ```
 
 ## Troubleshooting
