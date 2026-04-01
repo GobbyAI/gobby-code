@@ -22,7 +22,7 @@ cargo clippy --workspace --no-default-features -- -D warnings  # Lint all
 cargo fmt --all --check                              # Check formatting
 ```
 
-The `embeddings` feature (gcode, default: on) enables local GGUF embedding via `llama-cpp-2` and requires cmake. macOS builds use Metal GPU acceleration. Linux/Windows CI builds disable embeddings (`--no-default-features`).
+The `embeddings` feature (gcode, default: on) enables local GGUF embedding via `llama-cpp-2` and requires cmake. Metal GPU acceleration is automatically enabled on macOS via target-conditional dependencies; non-macOS platforms get CPU-only inference. CI builds that don't need embeddings use `--no-default-features`.
 
 ## Workspace Layout
 
